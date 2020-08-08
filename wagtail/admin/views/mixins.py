@@ -6,6 +6,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.http import HttpResponse, StreamingHttpResponse
 from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
+import tablib
 from xlsxwriter.workbook import Workbook
 
 from wagtail.admin.forms.search import SearchForm
@@ -65,7 +66,8 @@ class SpreadsheetExportMixin:
 
     FORMAT_XLSX = "xlsx"
     FORMAT_CSV = "csv"
-    FORMATS = (FORMAT_XLSX, FORMAT_CSV)
+    FORMAT_TSV = "tsv"
+    FORMATS = (FORMAT_XLSX, FORMAT_CSV, FORMAT_TSV)
 
     # A list of fields or callables (without arguments) to export from each item in the queryset (dotted paths allowed)
     list_export = []
@@ -206,12 +208,60 @@ class SpreadsheetExportMixin:
         )
         return response
 
+    def write_format_response(self, queryset, spreadsheet_format):
+        from io import BytesIO
+        from django.http import FileResponse
+
+        data = self.generate_dataset(queryset, spreadsheet_format)
+
+        if spreadsheet_format in [self.FORMAT_CSV, self.FORMAT_TSV]:
+            pass
+
+        if spreadsheet_format in [self.FORMAT_XLSX]:
+            data = BytesIO(data)
+
+        response = FileResponse(
+            data,
+        )
+
+        response["Content-Disposition"] = 'attachment; filename="{}.{}"'.format(
+            self.get_filename(),
+            spreadsheet_format,
+        )
+        return response
+
+    def generate_dataset(self, queryset, spreadsheet_format):
+        data = tablib.Dataset()
+        data.headers = [
+            self.get_heading(queryset, field) for field in self.list_export
+        ]
+
+        for item in queryset:
+            processed_row = []
+            row_dict = self.to_row_dict(item)
+
+            for field, value in row_dict.items():
+                preprocess_function = self.get_preprocess_function(
+                    field, value, self.FORMAT_CSV
+                )
+                processed_value = (
+                    preprocess_function(value) if preprocess_function else value
+                )
+                processed_row.append(processed_value)
+
+            data.append(processed_row)
+
+        export_data = data.export(spreadsheet_format)
+        return export_data
+
     def as_spreadsheet(self, queryset, spreadsheet_format):
         """ Return a response with a spreadsheet representing the exported data from queryset, in the format specified"""
         if spreadsheet_format == self.FORMAT_CSV:
-            return self.write_csv_response(queryset)
+            return self.write_format_response(queryset, self.FORMAT_CSV)
         elif spreadsheet_format == self.FORMAT_XLSX:
-            return self.write_xlsx_response(queryset)
+            return self.write_format_response(queryset, self.FORMAT_XLSX)
+        elif spreadsheet_format == self.FORMAT_TSV:
+            return self.write_format_response(queryset, self.FORMAT_TSV)
 
     def get_export_url(self, format):
         params = self.request.GET.copy()
@@ -225,3 +275,7 @@ class SpreadsheetExportMixin:
     @property
     def csv_export_url(self):
         return self.get_export_url('csv')
+
+    @property
+    def tsv_export_url(self):
+        return self.get_export_url('tsv')
