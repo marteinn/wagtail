@@ -231,7 +231,7 @@ class SpreadsheetExportMixin:
         return response
 
     def generate_dataset(self, queryset, spreadsheet_format):
-        data = tablib.Dataset()
+        data = tablib.Dataset(title="Sheet1")
         data.headers = [
             self.get_heading(queryset, field) for field in self.list_export
         ]
