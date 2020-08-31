@@ -4,7 +4,7 @@ import unittest
 from django import forms, template
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.test import TestCase, override_settings
+from django.test import TestCase, override_settings, SimpleTestCase
 from django.urls import reverse
 from taggit.forms import TagField, TagWidget
 
@@ -28,9 +28,10 @@ except ImportError:
 
 
 class TestImageTag(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         # Create an image for running tests on
-        self.image = Image.objects.create(
+        cls.image = Image.objects.create(
             title="Test image",
             file=get_test_image_file(),
         )
@@ -471,7 +472,7 @@ class TestFrontendSendfileView(TestCase):
         self.assertTrue(response.content, 'Dummy backend response')
 
 
-class TestRect(TestCase):
+class TestRect(SimpleTestCase):
     def test_init(self):
         rect = Rect(100, 150, 200, 250)
         self.assertEqual(rect.left, 100)
